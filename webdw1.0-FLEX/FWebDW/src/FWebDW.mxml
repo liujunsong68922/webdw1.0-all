@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute" width="802" height="558" initialize="init()">
+
+	<mx:Label x="10" y="10" text="转换比例：" textAlign="center"/>
+	<mx:TextInput x="73" y="8" width="53" text="0.3" id="TextConvertRate"/>
+	<mx:ComboBox x="143" y="8" id="dwlist" editable="false" enabled="true" dataProvider="{datas}" width="146"></mx:ComboBox>
+	<mx:Button x="311" y="8" label="设置数据窗口" click="setdw()"/>
+	<mx:Panel x="10" y="36" width="724" height="364" layout="absolute" id="Picture1">
+	
+	<mx:Script>
+	<![CDATA[
+		import com.webdw.MyInt;
+		import com.webdw.CWebDWUI;
+		import mx.controls.Alert;
+		import com.webdw.Golbal;
+		import mx.collections.ArrayCollection;
+		
+		private var ui:CWebDWUI = null;//new CWebDWUI();
+		private var targetControls:Array = new Array();
+		public var datas:ArrayCollection=new ArrayCollection(
+		[
+			{label:"d_stock_list", data:"d_stock_list"},
+			{label:"d_products_grid", data:"d_products_grid"}
+		]);
+
+		//界面初始化功能，初始化全局变量定义
+		private function init():void{
+			try{
+				Golbal.InitGlobalVariable();
+				ui = new CWebDWUI();
+				TextConvertRate.name ="TextConvertRate";
+				targetControls.push(TextConvertRate);
+				//Golbal.G_ServerURL = "http://webdw.vicp.net/myproj/Table";
+				Alert.show("Golbal Init ok");
+			}catch(e:Error){
+				Alert.show("Init ERROR: "+e.message);
+			}
+		}
+		
+		//初始化下拉框
+		private function initdwlist():void{
+			var d :DisplayObject = new DisplayObject();
+			
+			
+		}
+		
+		//设置数据窗口对象的功能
+		private function setdw():void{
+			try{
+			Alert.show("Begin Set DataWindow.");
+			var sdwname:String="";
+			sdwname = dwlist.text;
+			var iret:int =0;
+			iret = ui.DW_SetDataObjectByName(
+			targetControls,Picture2,Picture1,sdwname,false,true);
+			
+			if (iret==-1){
+				Alert("Error"+ui.errString);
+			} 
+			}catch(e:Error){
+				Alert.show(e.message);
+			}
+			
+ 		}
+ 		
+ 		//数据窗口的检索功能
+ 		private function retrieve():void{
+ 			try{
+ 				var iret:int =0;
+ 				iret = ui.DW_Retrieve();
+ 				if (iret == -1){
+ 					Alert.show("Error:"+ui.errString);
+ 				}
+ 			}catch(e:Error){
+ 				Alert.show("retrieve error:"+e.message);
+ 			}
+ 		}
+ 		
+ 		private function insert():void{
+ 			try{
+ 				var iret:int=0;
+ 				iret = ui.DW_InsertRow(0);
+ 				if (iret == -1){
+ 					Alert.show("Insert Error:"+ui.errString);
+ 				}
+ 			}catch(e:Error){
+ 				Alert.show("Insert Error:"+e.message);
+ 			}
+ 			
+ 		}
+ 		
+ 		private function update():void{
+ 			try{
+  				//'Update方法的测试按钮
+ 			   	var strinfo:String;
+				var strUpdate:String;
+    			var iret: MyInt = new MyInt(0);
+    			strUpdate = ui.DW_GetSQLPreview(iret);
+    
+    			if( iret.intvalue == -1){// Then
+        			//strinfo = langsupport.SumAllLang("得到Update语句错误", "GetSQLPreview Error:")
+        			//MsgBox ui.errString, vbExclamation, langsupport.GetCurrent(strinfo)
+        			//Exit Sub
+        			Alert.show("Get UpdateSQL Error:"+ui.errString);
+        			return;
+       			}else{
+        			//strinfo = langsupport.SumAllLang("返回Update语句:", "GetSQLPreview return:")
+        			//MsgBox strUpdate, , langsupport.GetCurrent(strinfo)
+        			Alert.show("Update SQL: "+strUpdate);
+       			}//End If
+    
+    			if( strUpdate == ""){// Then
+        			return;//Exit Sub
+    			}//End If
+    
+    			ui.DW_SetAutoCommit (1);// '设置为自动更新模式
+    			//Alert.show("Update:SetAutoCommit");
+    			iret.intvalue = ui.DW_Update();//     '调用更新方法
+    
+    			if (iret.intvalue == -1){// Then
+        			//strinfo = langsupport.SumAllLang("保存错误", "Update Error:")
+        			//MsgBox ui.errString, vbExclamation, langsupport.GetCurrent(strinfo)
+    				Alert.show("Update Error:"+ui.errString);
+    			}else{
+        			//strinfo = langsupport.SumAllLang("保存成功", "Update")
+        			//MsgBox "OK", , langsupport.GetCurrent(strinfo)
+        			Alert.show("Update Ok.");
+    			}//End If 				
+ 			}catch(e:Error){
+ 				Alert.show("Update Error:"+e.message);
+ 			}
+ 		}
+ 		
+ 		private function deleterow():void{
+ 			try{
+    			//'删除当前行的调用功能测试
+    			var strinfo : String="";
+    			var irow :int=0;//        '当前行定义
+    			irow = ui.DW_GetRow();//    '得到当前行，当前行为0代表没有当前行
+    
+    			if( irow == -1){// Then       '错误判断和显示
+        			//strinfo = langsupport.SumAllLang("得到当前行错误", "GetRow Error")
+        			//MsgBox ui.errString, vbExclamation, langsupport.GetCurrent(strinfo)
+        			Alert.show("Get CurrentRow Error:"+ui.errString);
+        			return;
+       			}
+    
+    
+    			var iret :int=0;// Long
+    			if( irow > 0 ){//Then
+        			iret = ui.DW_DeleteRow(irow)
+        			if( iret == -1){// Then
+            			//strinfo = langsupport.SumAllLang("删除错误", "DeleteRow Error")
+            			//MsgBox ui.errString, vbExclamation, langsupport.GetCurrent(strinfo)
+        				//End If
+        				Alert.show("Delete Error:"+ui.errString);
+        				return;
+        			}
+    			}
+ 			}catch(e:Error){
+ 				Alert.show("Delete Error:"+e.message);
+ 			}
+ 		}
+    ]]>
+	</mx:Script>
+	<mx:Panel x="0" y="0" width="647" height="275" layout="absolute" id="Picture2">
+	</mx:Panel>
+	</mx:Panel>
+	<mx:Button x="411" y="8" label="检索" click="retrieve()"/>
+	<mx:Button x="477" y="8" label="插入" click="insert()"/>
+	<mx:Button x="543" y="8" label="删除" click="deleterow()"/>
+	<mx:Button x="611" y="8" label="保存" click="update()"/>
+</mx:Application>
+

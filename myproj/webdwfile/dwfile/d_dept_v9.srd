@@ -1,0 +1,25 @@
+$PBExportHeader$d_dept_test_v9.srd
+release 9;
+datawindow(units=0 timer_interval=0 color=1073741824 processing=1 HTMLDW=no print.printername="" print.documentname="" print.orientation = 0 print.margin.left = 110 print.margin.right = 110 print.margin.top = 96 print.margin.bottom = 96 print.paper.source = 0 print.paper.size = 0 print.canusedefaultprinter=yes print.prompt=no print.buttons=no print.preview.buttons=no print.cliptext=no print.overrideprintjob=no print.collate=yes hidegrayline=no grid.lines=0 )
+header(height=120 color="536870912" )
+summary(height=0 color="536870912" )
+footer(height=0 color="536870912" )
+detail(height=80 color="536870912" )
+table(column=(type=long update=yes updatewhereclause=yes key=yes name=dept_id dbname="department.dept_id" validation="mod(  real(gettext()) , 100 ) = 0" validationmsg="'The department number must be a multiple of 100.'" )
+ column=(type=char(40) update=yes updatewhereclause=yes name=dept_name dbname="department.dept_name" )
+ column=(type=long update=yes updatewhereclause=yes name=dept_head_id dbname="department.dept_head_id" )
+ retrieve="PBSELECT(TABLE(NAME=~"department~") COLUMN(NAME=~"department.dept_id~")COLUMN(NAME=~"department.dept_name~")COLUMN(NAME=~"department.dept_head_id~"))" update="department" updatewhere=1 updatekeyinplace=no )
+text(band=header alignment="2" text="Department
+ID" border="0" color="33554432" x="9" y="8" height="104" width="297" html.valueishtml="0"  name=dept_id_t visible="1"  font.face="MS Sans Serif" font.height="-8" font.weight="700"  font.family="2" font.pitch="2" font.charset="0" background.mode="1" background.color="536870912" )
+text(band=header alignment="0" text="Department Name" border="0" color="33554432" x="315" y="8" height="52" width="896" html.valueishtml="0"  name=dept_name_t visible="1"  font.face="MS Sans Serif" font.height="-8" font.weight="700"  font.family="2" font.pitch="2" font.charset="0" background.mode="1" background.color="536870912" )
+text(band=header alignment="2" text="Manager
+ID" border="0" color="33554432" x="1221" y="8" height="104" width="224" html.valueishtml="0"  name=dept_head_id_t visible="1"  font.face="MS Sans Serif" font.height="-8" font.weight="700"  font.family="2" font.pitch="2" font.charset="0" background.mode="1" background.color="536870912" )
+column(band=detail id=1 alignment="1" tabsequence=10 border="0" color="33554432" x="9" y="8" height="60" width="297" format="[general]" html.valueishtml="0"  name=dept_id  tag="Unique Identification Code of the department" visible="1" edit.limit=0 edit.case=any edit.focusrectangle=no edit.autoselect=yes edit.autohscroll=yes edit.imemode=0  font.face="MS Sans Serif" font.height="-8" font.weight="400"  font.family="2" font.pitch="2" font.charset="0" background.mode="1" background.color="536870912" )
+column(band=detail id=2 alignment="0" tabsequence=20 border="0" color="33554432" x="315" y="8" height="60" width="896" format="[general]" html.valueishtml="0"  name=dept_name  tag="Name of the department" visible="1" edit.limit=40 edit.case=any edit.focusrectangle=no edit.autoselect=yes edit.autohscroll=yes edit.imemode=0  font.face="MS Sans Serif" font.height="-8" font.weight="400"  font.family="2" font.pitch="2" font.charset="0" background.mode="1" background.color="536870912" )
+column(band=detail id=3 alignment="1" tabsequence=30 border="0" color="33554432" x="1221" y="8" height="60" width="224" format="[general]" html.valueishtml="0"  name=dept_head_id  tag="Identification number of the department manager" visible="1" edit.name="employees" dddw.name=d_dddw_sales_reps dddw.displaycolumn=emp_id dddw.datacolumn=emp_id dddw.percentwidth=400 dddw.lines=0 dddw.limit=0 dddw.allowedit=no dddw.useasborder=no dddw.case=any dddw.imemode=0 dddw.vscrollbar=yes  font.face="MS Sans Serif" font.height="-8" font.weight="400"  font.family="2" font.pitch="2" font.charset="0" background.mode="1" background.color="536870912" )
+htmltable(border="1" )
+htmlgen(clientevents="1" clientvalidation="1" clientcomputedfields="1" clientformatting="0" clientscriptable="0" generatejavascript="1" encodeselflinkargs="1" netscapelayers="0" )
+export.xml(headgroups="1" includewhitespace="0" metadatatype=0 savemetadata=0 )
+import.xml()
+export.pdf(method=0 distill.custompostscript="0" xslfop.print="0" )
+ 

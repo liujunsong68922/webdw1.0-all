@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<meta http-equiv="Access-Control-Allow-Origin" content="*">
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Insert title here</title>
+<script src="jswebdw/jquery-3.3.1.js"></script>
+<!--
+<script src="jswebdw/WebDWSyntax_Cloneable.js"></script>
+<script src="jswebdw/WebDW_Column_Element.js"></script>
+<script src="jswebdw/WebDW_Column.js"></script>
+<script src="jswebdw/WebDW_Element.js"></script>
+<script src="jswebdw/WebDW_Table.js"></script>
+<script src="jswebdw/WebDWSyntax.js"></script>
+-->
+<script src="jswebdw_v1.1/WebDW_Syntax_all.js"></script>
+
+<!--
+<script src="jswebdw/VBFunction.js"></script>
+<script src="jswebdw/Golbal.js"></script>
+<script src="jswebdw/MyInt.js"></script>
+<script src="jswebdw/CMultiLang.js"></script>
+<script src="jswebdw/CWebDWDisplayFormat.js"></script>
+-->
+<script src="jswebdw_v1.1/WebDW_common_all.js"></script>
+
+<script src="jswebdw/CWebDWTransaction.js"></script>
+
+<!--
+<script src="jswebdw/CWebDW_Create.js"></script>
+<script src="jswebdw/CWebDW_GetRetrieveSQL.js"></script>
+<script src="jswebdw/CWebDW_GetSyntaxString.js"></script>
+<script src="jswebdw/CWebDW_SyntaxFromSQL.js"></script>
+<script src="jswebdw/CWebDW.js"></script>
+
+<script src="jswebdw/CWebDWData_DataBuffer.js"></script>
+<script src="jswebdw/CWebDWData.js"></script>
+-->
+<script src="jswebdw_v1.1/CWebDW_all.js"></script>
+
+<!--
+<script src="jswebdw/ui/MyFont.js"></script>
+<script src="jswebdw/ui/Rectangle.js"></script>
+<script src="jswebdw/ui/MyUIComponentConst.js"></script>
+<script src="jswebdw/ui/MyUIComponent.js"></script>
+<script src="jswebdw/ui/container/MyUIContainer.js"></script>
+<script src="jswebdw/ui/container/MyJPanel.js"></script>
+<script src="jswebdw/ui/element/MyUIElement.js"></script>
+<script src="jswebdw/ui/element/MyJCheckBox.js"></script>
+<script src="jswebdw/ui/element/MyJComboBox.js"></script>
+<script src="jswebdw/ui/element/MyJLabel.js"></script>
+<script src="jswebdw/ui/element/MyJRadioButton.js"></script>
+<script src="jswebdw/ui/element/MyJTextField.js"></script>
+
+<script src="jswebdw/CWebDWUI_ParentDW.js"></script>
+<script src="jswebdw/CWebDWUI_ChildDW.js"></script>
+<script src="jswebdw/CWebDWUI.js"></script>
+-->
+<script src="jswebdw_v1.1/CWebDW_UI_all.js"></script>
+
+<script src="jswebdw/CWebDWUIView_V1.js"></script>
+<style> 
+.divcss5{position:relative;width:400px;height:150px;overflow:auto;
+border:1px solid #060}
+</style>
+
+</head>
+<body>
+	<h3>Welcome to JSWebDW's world! (欢迎来到JSWebDW的世界！)</h2>
+	<h4>操作说明：先点击“设置数据窗口对象按钮”，再点击“检索后台数据”按钮，看看执行效果如何</h4>
+	<script>
+		var a = new VBFunction();
+		var b = new CWebDWTransaction();
+		var c = new CWebDW();
+		var d = new CWebDWData();
+		
+		var webdwui = new CWebDWUI();
+		alert("webdwui:"+webdwui);
+		</script>
+		
+	<input type="button" onclick="setDW()" value="设置数据窗口对象">	
+	<input type="button" onclick="retrieveDW()" value="检索后台数据">	
+	
+	<div id="Picture1" name="Picture1" style="position:absolute;left:10px;top:140px; height:260px;width:1000px;overflow:auto">
+		<div id="Picture2" name="Picture2" style="height:250px;width:1000px;overflow:auto">
+
+		</div>		
+	</div>
+				
+		<script>
+		//this is the CWebDWUI's test.
+		var g_targetControls = new Array(); //这里存放所有的动态创建的对象的清单
+		var picture2 = document.getElementById("Picture2");
+		var picture1 = document.getElementById("Picture1");
+		
+		//alert(picture1);
+		//alert(picture2);
+		</script>
+		<script>
+		function setDW(){
+			alert("setdw test");		
+			var dwname = "d_products"; //后台数据窗口的名字
+			var iret2 = 0;
+			iret2 = webdwui.DW_SetDataObjectByName(g_targetControls, picture2,
+							picture1, dwname, true, true);
+							
+			var webdwuiview = new CWebDWUIView("Picture2");
+			webdwuiview.drawAllChild(g_targetControls);
+			
+		}
+		
+		function retrieveDW(){
+			alert("retrieve test");
+			var iret3 = 0;
+			iret3 = webdwui.DW_Retrieve("");
+			
+			var webdwuiview2 = new CWebDWUIView("Picture2");
+			webdwuiview2.drawAllChild(g_targetControls);
+		}
+		</script>
+	
+
+</body>
+</html>

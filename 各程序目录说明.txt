@@ -1,0 +1,35 @@
+WebDW1.0是一个相对来说比较奇特的软件，他是一个B/S时代向传统C/S时代致敬的产物。
+
+|----myproj: WebDW1.0的服务器版本，这个服务器版本使用JAVA语言编写了一个Servlet来提供服务	
+        |----src : java源代码和数据库连接配置文件
+                  |---- com/liu/database.properties : 利用JDBC来连接后台数据库(mysql)的连接配置
+        |----WebContent
+                  |---- WEB-INF
+                         |---- web.xml 服务器的web.xml文件，由于此项目启动的时间较早，直接使用的Servlet配置方法，配置一个Servlet
+        |---- dbsql
+                 |---- webdw1.0.sql 这个sql脚本用来初始化后台数据查询所使用的数据库demo数据表及数据表
+        |---- webdwfile
+                 |---- dwfile 这个目录下存放了所有演示用的dw文件（数据窗口文件源代码），发布时将webdwfile目录整体拷贝到C:\下
+                         java服务器将读取这个目录下的文件，传送给前端应用程序来做界面解析使用。
+        |---- war
+                 |---- myproj.war 打包完毕的war文件
+
+|---- webdw1.0-VB 使用VB编写的Webdw1.0的版本，开发语言：VB6.0，
+        |---- webdw VB6.0编写的数据窗口控件的源代码
+        |---- exe
+                |---- WebdW-VB.exe 编译生成的可执行文件，可直接运行
+
+|---- webdw1.0-JAVA 使用JAVA编写的Webdw1.0的版本，开发语言：JAVA,SWING
+        |---- jwebdw JAVA版本的webdw客户端的工程项目，其中包括源代码
+               |---- src/com/webdw/demo/UIDemo.java 用JAVA编写的图形化webdw的演示窗口
+               |---- src/com/webdw java版本的数据窗口的源代码
+
+|---- webdw1.0-JAVASCRIPT
+       |---- jswebdw 使用JavaScript编写的Webdw客户端工程项目，这个项目是一个web项目，但其中只有 javascript代码
+                             没有java代码
+       |---- war
+               |----  jswebdw.war javascript编译以后的war包。
+
+|---- webdw1.0-FLEX 
+      这个目录下是使用FlexBuilder编写的Flex版本的WebDW客户端，最终编译的结果在bin-debug目录下
+      由于Flex现在已经是一个被迫强制淘汰的技术了，这里只是保留下来做存档使用了。

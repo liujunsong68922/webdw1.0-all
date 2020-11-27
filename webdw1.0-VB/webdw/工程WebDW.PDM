@@ -1,0 +1,109 @@
+[Root]
+Most Recent Package=Standard Setup Package 1
+
+
+[Package|Standard Setup Package 1|Root]
+SubWizProgID=PDWizard.SetupPkgSubWiz
+BuildFolder=D:\Program Files\Microsoft Visual Studio\VB98\webdw\Package
+
+[Package|Standard Setup Package 1|Configure DAO ISAMs]
+Applicable=No
+
+[Package|Standard Setup Package 1|Configure DAO ODBC]
+JetWorkspace=
+ODBCDirect=
+
+[Package|Standard Setup Package 1|Files Found]
+
+[Package|Standard Setup Package 1|Files Released]
+
+[Package|Standard Setup Package 1|Missing Dependency Information]
+C:\WINDOWS\system32\msxml6.dll=
+C:\WINDOWS\system32\msxml2.dll=
+
+[Package|Standard Setup Package 1|Out-of-Date Dependency Information]
+C:\WINDOWS\system32\Mscomctl.ocx=
+
+[Package|Standard Setup Package 1|Files Added]
+D:\Program Files\Microsoft Visual Studio\VB98\webdw\createtable.sql=
+
+[Package|Standard Setup Package 1|Files Removed]
+c:\windows\system32\msxml6.dll=
+c:\windows\system32\mscomctl.ocx=
+c:\windows\system32\msxml2.dll=
+c:\windows\system32\msvbvm60.dll=
+c:\windows\system32\oleaut32.dll=
+c:\windows\system32\olepro32.dll=
+c:\windows\system32\asycfilt.dll=
+c:\windows\system32\stdole2.tlb=
+d:\program files\microsoft visual studio\vb98\wizards\pdwizard\redist\comcat.dll=
+
+[Package|Standard Setup Package 1|Files In Project]
+D:\Program Files\Microsoft Visual Studio\VB98\webdw\工程WebDW.exe=Yes
+C:\WINDOWS\system32\msvbvm60.dll=No
+C:\WINDOWS\system32\oleaut32.dll=No
+C:\WINDOWS\system32\olepro32.dll=No
+C:\WINDOWS\system32\asycfilt.dll=No
+C:\WINDOWS\system32\stdole2.tlb=No
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\COMCAT.DLL=No
+C:\WINDOWS\system32\Mscomctl.ocx=No
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP.EXE=Yes
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP1.EXE=Yes
+C:\WINDOWS\system32\VB6STKIT.DLL=Yes
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\ST6UNST.EXE=Yes
+C:\WINDOWS\system32\msxml2.dll=No
+D:\Program Files\Microsoft Visual Studio\VB98\webdw\createtable.sql=Yes
+
+[Package|Standard Setup Package 1|Configure Registry Files]
+Applicable=No
+
+[Package|Standard Setup Package 1|Configure Remote Servers]
+Applicable=No
+
+[Package|Standard Setup Package 1|Install Locations]
+D:\Program Files\Microsoft Visual Studio\VB98\webdw\工程WebDW.exe=$(AppPath)
+C:\WINDOWS\system32\msvbvm60.dll=$(WinSysPathSysFile)
+C:\WINDOWS\system32\oleaut32.dll=$(WinSysPathSysFile)
+C:\WINDOWS\system32\olepro32.dll=$(WinSysPathSysFile)
+C:\WINDOWS\system32\asycfilt.dll=$(WinSysPathSysFile)
+C:\WINDOWS\system32\stdole2.tlb=$(WinSysPathSysFile)
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\COMCAT.DLL=$(WinSysPathSysFile)
+C:\WINDOWS\system32\Mscomctl.ocx=$(WinSysPath)
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP.EXE=$(AppPath)
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP1.EXE=$(WinPath)
+C:\WINDOWS\system32\VB6STKIT.DLL=$(WinSysPathSysFile)
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\ST6UNST.EXE=$(WinPath)
+C:\WINDOWS\system32\msxml6.dll=$(WinSysPath)
+C:\WINDOWS\system32\msxml2.dll=$(WinSysPath)
+D:\Program Files\Microsoft Visual Studio\VB98\webdw\createtable.sql=$(AppPath)
+
+[Package|Standard Setup Package 1|Configure Shared Files]
+Applicable=Yes
+D:\Program Files\Microsoft Visual Studio\VB98\webdw\工程WebDW.exe=No
+D:\Program Files\Microsoft Visual Studio\VB98\webdw\createtable.sql=No
+
+[Package|Standard Setup Package 1|Distribution]
+Type=single
+Size=
+Title=工程Webdw
+
+[Package|Standard Setup Package 1|Package]
+PackageFolder=D:\Program Files\Microsoft Visual Studio\VB98\webdw\Package
+ProjectFolder=D:\Program Files\Microsoft Visual Studio\VB98\webdw
+ServerSideCab=
+File1=D:\Program Files\Microsoft Visual Studio\VB98\webdw\Package\setup.exe
+File2=D:\Program Files\Microsoft Visual Studio\VB98\webdw\Package\Setup.Lst
+File3=D:\Program Files\Microsoft Visual Studio\VB98\webdw\Package\工程WebDW.CAB
+Handler1=PDWizard.FolderDplySubWiz
+Handler2=PDWizard.WebPostDplySubWiz
+
+[Package|Standard Setup Package 1|IconGroups]
+Group0=工程Webdw
+PrivateGroup0=True
+Parent0=$(Programs)
+
+[Package|Standard Setup Package 1|工程Webdw]
+Icon1=工程WebDW.exe
+Title1=工程Webdw
+StartIn1=$(AppPath)
+Key1=Icon1

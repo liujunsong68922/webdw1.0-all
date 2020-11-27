@@ -1,0 +1,1742 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+  Persistable = 0  'NotPersistable
+  DataBindingBehavior = 0  'vbNone
+  DataSourceBehavior  = 0  'vbNone
+  MTSTransactionMode  = 0  'NotAnMTSObject
+END
+Attribute VB_Name = "CWebDWUI"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = True
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Rem -------------------------------------------------
+Rem WebDW用户界面解析器，VB功能类
+Rem 主要功能：将一个字符串描述转换成相应的图形界面
+Rem 图形界面和字符串的描述，两者在逻辑上是完全等价的
+Rem 这个功能类似于浏览器的图形解释器,把HTML语言翻译成一个图形化界面
+Rem 其中包括文本,图形等多种元素(一开始可能只有文本)
+Rem 通过一定的技术把界面和数据库可以关联起来
+Rem 第一版本的界面解析器，格式严格按照PB7的数据窗口字符串格式来获取
+Rem 所有以DW_开头的方法，提供和PB Datawindow控件类似的功能和调用接口
+Rem @CopyRight Mr.Liu Junsong 2008-2009
+Rem @版权所有 刘峻松 2008-2009
+Rem E_mail : liujunsong@yahoo.com.cn
+Rem -------------------------------------------------
+
+Option Explicit
+
+Dim myControls(1 To 10000) As Control                       'myControls代表界面上自动创建的控件的集合
+                                                            '上述控件的实际物理地址在form上，
+                                                            '这里存放的只是一个控件对象的指针
+
+Dim controlSeg As Long                                      '相当于一个控件的序列，每增加一个自动加一
+Public webdw As CWebDWUI_FromString                         '定义webdw对应的文件读取类
+Public webdwReader As CWebDWUI_GetSelectSQL                 '定义webdwReader的读取类对象
+Public webdwWriter As CWebDWUI_ToString                         '定义webdwWriter的写入类对象
+Public webdwcolor As CWebDWUI_Color                            '定义webdw的color相关类
+Public webdwGener As CWebDWUI_SyntaxFromSQL                 'webdw的生成器类，利用sql生成
+Public childdw As CWebDWChildDW                             '子数据窗口的类定义
+
+'Public beginRowId As Long                                   '界面上显示的开始行，默认为1
+Public errString As String                                  '返回的错误信息字符串
+
+Public sqlca As CWebDWTransaction                           '事务支持？SQL访问支持对象
+Public webdwData As CWebDWData                              '定义webdw的数据对象类
+
+'------------下面的定义是界面上的对应元素定义，这个定义在setdataobject中设置
+    Dim targetControls As Variant  '这个容器，表示所有的控件集合容器对象,在SetDataObject中初始化设置,20090116日添加
+    Dim targetPict   As PictureBox '这个代表要进行绘制的PictureBox,20090116日添加
+    Dim VScroll_Page As vscrollbar '表示一页内变化的VScrollBar,最大翻动到一页
+    Dim VScroll_Line As vscrollbar '表示行变化的VScrollBar,一次最少翻动一行
+    Dim HScroll_Page As HScrollBar '表示页面左右翻动的HscrollBar，一次翻动半页
+    Dim ImagePoint As Image         '指示当前行用的图标,可以用底色图片来表示当前行
+    Dim TextConvertRate As TextBox  '表示转换比例的文本框，在窗口上
+    Dim childPict As PictureBox     '子数据窗口绘制用的窗口
+    
+'------------界面元素的定义完毕
+
+'------------下面的定义是界面上的动态元素对应的事件处理器定义
+    Private WithEvents myTextBox As TextBox             'myTextBox是一个虚拟的文本框，用来定义文本框事件响应
+Attribute myTextBox.VB_VarHelpID = -1
+    Private WithEvents myOptionButton As OptionButton   'myOptionButton是一个虚拟的选择按钮，定义选择按钮响应
+Attribute myOptionButton.VB_VarHelpID = -1
+    Private WithEvents myCheckBox As checkbox           'myCheckBox是一个虚拟的检查框，定义选择按钮响应
+Attribute myCheckBox.VB_VarHelpID = -1
+    Private WithEvents myComboBox As combobox           'myComboBox是一个虚拟的下拉框，定义响应事件
+Attribute myComboBox.VB_VarHelpID = -1
+'------------界面动态元素定义完毕
+Private currentRow As Long                                   '界面当前行定义
+
+Private g_webdw As WebDWSyntax                       'g_webdw现在是一个局部变量了，而不是全局变量了
+
+'功能描述：设置g_webdw的值
+'输入：gg_webdw
+'输出：g_webdw
+Public Function SetWebDW()
+    g_webdw = GG_webdw
+End Function
+
+'功能描述：读取g_webdw的值
+'输入:g_webdw
+'输出:gg_webdw
+Public Function GetWebDW()
+    GG_webdw = g_webdw
+End Function
+
+
+'画标签的方法
+'targetControls 目标窗体或者用户控件的控件集合
+'pictTarget 目标图片框
+'lineNum    行号0代表绘制表头，其他代表具体的行号
+'leftpos    所有元素的左偏移量 leftpos <=0
+'图形数据来源: g_webdw
+Private Function drawLabel(targetControls As Variant, targetPict As PictureBox, convertrate As Double, _
+                            lineNum As Long, Optional leftPos As Long = 0) As Long
+    Dim id As Long
+    Dim sname As String
+    Dim obj As Control
+    Dim top As Long
+    Dim stf As StdFont
+    Dim beginRowId As Long
+    beginRowId = VScroll_Line.value + 1
+    
+    For id = 1 To 100
+        If g_webdw.text(id).Name = "" Then
+            drawLabel = 0
+            Exit Function
+        End If
+        
+        If lineNum = 0 And g_webdw.text(id).band <> "header" Then   '绘制头部，band不为header,退出
+            GoTo continueNext
+        End If
+        
+        If lineNum > 0 And g_webdw.text(id).band <> "detail" Then   '绘制细节，band不为detail,退出
+            GoTo continueNext
+        End If
+        
+        '先计算标签的top值，以此来判断是否需要继续创建对象并绘制之
+        If g_webdw.text(id).band = "header" Then top = g_webdw.text(id).y
+        If g_webdw.text(id).band = "detail" Then top = g_webdw.text(id).y _
+                        + g_webdw.header.height _
+                        + g_webdw.detail.height * (lineNum - beginRowId)
+                    
+        '根据top值进行判断，如果这个值超过了targetPict的范围，就跳出本次循环
+        If top <= 0 Or top > targetPict.height * convertrate Then
+            GoTo continueNext
+        End If
+        
+        If top >= 0 And top <= g_webdw.header.height And g_webdw.text(id).band <> "header" Then
+            GoTo continueNext
+        End If
+        
+        
+        '为了避免创建无效的控件，仅创建在当前界面可见范围内的控件出来
+        '行号的判断在DrawDW中进行
+        '此处仅判断width是否超标
+        If g_webdw.text(id).x + g_webdw.text(id).width + leftPos < 0 Or _
+           g_webdw.text(id).x + leftPos > targetPict.width * convertrate Then
+            GoTo continueNext
+        End If
+        
+        controlSeg = controlSeg + 1
+        sname = targetPict.Name & "_" & lineNum _
+                    & "_" & g_webdw.text(id).Name
+        
+        Set obj = targetControls.Add("VB.Label", sname, targetPict) '创建控件
+        Set myControls(controlSeg) = obj                            '存储对于控件的引用
+         
+        
+        With obj
+            .top = top
+            .Left = g_webdw.text(id).x + leftPos                    '加上对应的偏移量
+            .width = g_webdw.text(id).width
+            .height = g_webdw.text(id).height
+            .BorderStyle = 0
+            .alignment = g_webdw.text(id).alignment
+            .Caption = g_webdw.text(id).text
+            
+            '增加对颜色的支持20081219日添加
+            If g_webdw.text(id).background_mode = 2 Then
+                .BackColor = webdwcolor.getVBColor( _
+                            g_webdw.text(id).background_color, 256# * 256 * 256 - 1)
+            End If
+            .ForeColor = webdwcolor.getVBColor( _
+                            g_webdw.text(id).color, 256# * 256 * 256 - 1)
+                            
+        End With
+        
+        Set stf = New StdFont
+        '增加对字体的支持20081219日添加
+        If g_webdw.text(id).font.weight > 500 Then
+            stf.Bold = True
+        Else
+            stf.Bold = False
+        End If
+            
+        If g_webdw.text(id).font.italic > 0 Then
+            stf.italic = True
+        Else
+            stf.italic = False
+        End If
+            
+        If g_webdw.text(id).font.underline > 0 Then
+            stf.underline = True
+        Else
+            stf.underline = False
+        End If
+            
+        If g_webdw.text(id).font.strikethrough > 0 Then
+            stf.strikethrough = True
+        Else
+            stf.strikethrough = False
+        End If
+            
+        stf.Name = g_webdw.text(id).font.face
+        stf.Size = g_webdw.text(id).font.height * -1
+        stf.weight = g_webdw.text(id).font.weight
+            
+        Set obj.font = stf
+        obj.Visible = True
+    
+continueNext:
+    Next
+End Function
+
+'画文本框的方法
+'targetControls 目标控件集合
+'pictTarget     要绘制的图片框
+'lineNum        行号，从1开始，文本框只在detail区域绘制，不考虑其他区域
+'leftpos        左偏移量，对象向左偏移leftpos<0
+Private Function drawColumn(targetControls As Variant, targetPict As PictureBox, convertrate As Double, _
+                            lineNum As Long, Optional leftPos As Long = 0) As Long
+    
+    Dim id As Long
+    Dim sname As String
+    Dim obj As Control
+    Dim top As Long
+    Dim iborder As Long
+    Dim svalue As String
+    Dim stf As StdFont
+    Dim beginRowId As Long
+    beginRowId = VScroll_Line.value + 1
+    
+    For id = 1 To 100
+        If g_webdw.column(id).Name = "" Then    '列名为空，退出本列的执行，继续循环
+            GoTo continueNext
+        End If
+        
+        If lineNum = 0 Then                     '控件不可在头部绘制，跳出循环
+            GoTo continueNext
+        End If
+        
+        '先计算标签的top值，以此来判断是否需要继续创建对象并绘制之
+         top = g_webdw.column(id).y + g_webdw.header.height _
+                + g_webdw.detail.height * (lineNum - beginRowId)
+        
+        If top <= 0 Or top > targetPict.height Then
+            GoTo continueNext
+        End If
+        
+        If top >= 0 And top <= g_webdw.header.height And g_webdw.column(id).band <> "header" Then
+            GoTo continueNext
+        End If
+        
+        '判断对象的偏移，看是否要创建
+        If g_webdw.column(id).x + g_webdw.column(id).width + leftPos < 0 Or _
+            g_webdw.column(id).x + leftPos > targetPict.width * convertrate Then
+            GoTo continueNext
+        End If
+        
+        
+        controlSeg = controlSeg + 1
+        sname = targetPict.Name & "__" & lineNum _
+                    & "__" & g_webdw.column(id).Name
+        
+        svalue = webdwData.GetItemString(lineNum, id)      '得到原始信息数据
+        
+        
+        
+         Set obj = targetControls.Add("VB.TextBox", sname, targetPict)
+         Set myControls(controlSeg) = obj                    '存储对于控件的引用
+        
+        
+         If g_webdw.column(id).border > 0 Then
+            iborder = 1
+         Else
+            iborder = 0
+         End If
+         With obj
+             .top = top
+             .Left = g_webdw.column(id).x + leftPos         '加上偏移量
+             .width = g_webdw.column(id).width
+             .height = g_webdw.column(id).height
+             .BorderStyle = iborder
+             .alignment = g_webdw.column(id).alignment
+             .text = svalue
+             '.Enabled = False
+             '颜色的支持20081219日完成
+             If g_webdw.column(id).background_mode = 2 Then
+                .BackColor = webdwcolor.getVBColor( _
+                    g_webdw.column(id).background_color, 256# * 256 * 256 - 1)
+             End If
+             .ForeColor = webdwcolor.getVBColor( _
+                    g_webdw.column(id).color, 256# * 256 * 256 - 1)
+             
+        End With
+        
+        Set stf = New StdFont
+        '增加对字体的支持20081219日添加
+        If g_webdw.column(id).font.weight > 500 Then
+            stf.Bold = True
+        Else
+            stf.Bold = False
+        End If
+            
+        If g_webdw.column(id).font.italic > 0 Then
+            stf.italic = True
+        Else
+            stf.italic = False
+        End If
+            
+        If g_webdw.column(id).font.underline > 0 Then
+            stf.underline = True
+        Else
+            stf.underline = False
+        End If
+            
+        If g_webdw.column(id).font.strikethrough > 0 Then
+            stf.strikethrough = True
+        Else
+            stf.strikethrough = False
+        End If
+            
+        stf.Name = g_webdw.column(id).font.face
+        stf.Size = g_webdw.column(id).font.height * -1
+        stf.weight = g_webdw.column(id).font.weight
+            
+        Set obj.font = stf
+        
+        obj.Visible = True
+        'Add by Liujunsong 2009-1-23 增加对Edit Style的支持
+        '如果这一列指定了显示格式，那么在界面上将数据进行格式化输出
+        '如果这一列指定需要将编码转换成名称，那么就在显示时进行转换
+        '先考虑增加列表转换的支持
+        
+        '增加单选按钮的支持20090123
+        Dim valuestring As String
+        'Dim convertrate As Double
+        'convertrate = getConvertRate    '得到转换比例定义
+        
+        valuestring = g_webdw.table.Columns(id).values   '得到values表示
+        
+        '--------------------------单选框编辑风格支持开始-----------------------------
+        Dim radioobj As Control
+        Dim frameObj As Control       '单选按钮的容器Frame对象
+        Dim value() As String
+        Dim radioid As Long         'radio序号
+        Dim radioValue As String    'radio值
+        Dim radioDisplay As String  'radio显示
+        Dim tabpos As Long
+        
+        If valuestring > "" And _
+             g_webdw.column(id).radiobuttons.Columns > 0 Then  '是单选按钮编辑风格
+                '如果是单选钮风格，需要先创建一个包含它的容器出来
+                sname = targetPict.Name & "__" & lineNum & "__" _
+                            & g_webdw.column(id).Name & "__" & "Frame"
+                Set frameObj = targetControls.Add("VB.Frame", sname, targetPict)
+                controlSeg = controlSeg + 1
+                Set myControls(controlSeg) = frameObj
+                frameObj.Left = obj.Left
+                frameObj.top = obj.top
+                frameObj.width = obj.width - 10
+                frameObj.height = obj.height
+                frameObj.Visible = True
+                
+                '然后再在这个容器的基础上来创建选择按钮
+                value = Split(valuestring, "/")
+                For radioid = 0 To UBound(value)
+                    If value(radioid) = "" Then
+                        Exit For
+                    End If
+                    
+                    tabpos = InStr(1, value(radioid), Chr(9))       'value中Tab键的位置
+                    If tabpos > 0 Then
+                        radioDisplay = Left(value(radioid), tabpos - 1)
+                        radioValue = Mid(value(radioid), tabpos + 1, Len(value(radioid)) - tabpos)
+                    Else
+                        radioDisplay = ""
+                        radioValue = ""
+                        Exit For        '数据格式错误，跳过这个列的显示
+                    End If
+                    
+                    sname = targetPict.Name & "__" & lineNum & "__" _
+                            & g_webdw.column(id).Name & "__" & radioValue
+                            
+                    Set radioobj = targetControls.Add("VB.OptionButton", sname, frameObj)
+                    controlSeg = controlSeg + 1
+                    Set myControls(controlSeg) = radioobj
+                    
+                    radioobj.Caption = radioDisplay
+                    radioobj.Left = 10 / convertrate
+                    radioobj.top = (30 + 50 * radioid) / convertrate
+                    radioobj.width = (obj.width - 40) / convertrate
+                    radioobj.height = 40 / convertrate
+                    radioobj.tag = radioValue                   '把对应值放在tag属性里面
+                    radioobj.Visible = True
+                    
+                    '根据当前字段的数据，与radioobj代表的数据比较，如果相同，就设置选中状态
+                    If radioValue = svalue Then
+                        radioobj.value = True
+                    Else
+                        radioobj.value = False
+                    End If
+                    
+                    obj.Visible = False
+                Next '循环判断radio的结束
+        End If '如果是单选框编辑风格定义的结束
+        '------------------------单选框编辑风格结束----------------------------------------
+        
+        '------------------------选择框编辑风格开始----------------------------------------
+        Dim myCheckBox As Control
+        If valuestring > "" And g_webdw.column(id).checkbox.text > "" Then
+            sname = targetPict.Name & "__" & lineNum & "__" & g_webdw.column(id).Name & "__CheckBox"
+            '对象名之所以重新定义一个，是因为和obj重名了
+            Set myCheckBox = targetControls.Add("VB.CheckBox", sname, targetPict)
+            
+            controlSeg = controlSeg + 1
+            Set myControls(controlSeg) = myCheckBox
+            
+            myCheckBox.Left = obj.Left
+            myCheckBox.top = obj.top
+            myCheckBox.width = obj.width
+            myCheckBox.height = obj.height
+            
+            myCheckBox.Caption = g_webdw.column(id).checkbox.text
+            If g_webdw.column(id).checkbox.on = svalue Then     '数据一致
+                myCheckBox.value = 1                            '显示为选中
+            Else
+                myCheckBox.value = 0                            '显示为未选中
+            End If
+            myCheckBox.Visible = True
+            obj.Visible = False
+        End If  '复选框的编辑风格结束
+        '------------------------选择框编辑风格结束----------------------------------------
+        
+        '------------------------下拉列表框编辑风格结束----------------------------------------
+        Dim myComboBox As combobox
+        Dim combovalues() As String
+        Dim combostring As String
+        Dim combotabpos As Long
+        Dim combo_display As String
+        Dim combo_value As String
+        Dim combo_id As Long
+        
+        If valuestring > "" And g_webdw.column(id).combobox.allowedit > "" Then
+            sname = targetPict.Name & "__" & lineNum & "__" & g_webdw.column(id).Name & "__ComboBox"
+            '对象名重定义，是因为和obj有重名的问题
+            Set myComboBox = targetControls.Add("VB.ComboBox", sname, targetPict)
+            
+            controlSeg = controlSeg + 1
+            Set myControls(controlSeg) = myComboBox
+        
+            myComboBox.Left = obj.Left
+            myComboBox.top = obj.top
+            myComboBox.width = obj.width
+            'myComboBox.height = obj.height     '系统下拉框的属性是只读的
+            
+            combovalues = Split(valuestring, "/")
+            For combo_id = 0 To UBound(combovalues)
+                If combovalues(combo_id) = "" Then
+                    Exit For
+                End If
+                
+                combotabpos = InStr(1, combovalues(combo_id), Chr(9))
+                If combotabpos > 0 Then
+                    combo_display = Mid(combovalues(combo_id), 1, combotabpos - 1)
+                    combo_value = Mid(combovalues(combo_id), combotabpos + 1)
+                    myComboBox.AddItem combo_display, combo_id
+                    
+                    If combo_value = svalue Then            '如果数值相同，则设置ListIndex
+                        myComboBox.ListIndex = combo_id
+                    End If
+                End If
+            Next
+            
+            myComboBox.Visible = True
+            obj.Visible = False
+        End If
+        '------------------------下拉列表框编辑风格结束----------------------------------------
+        
+        '------------------------下拉数据窗口编辑风格的支持------------------------------------
+        If g_webdw.column(id).dddw.Name > "" And g_webdw.column(id).dddw.DataColumn > "" _
+          And g_webdw.column(id).dddw.DisplayColumn > "" And g_webdw.column_dddw_data(id) > "" _
+          And g_webdw.column_dddw_data(id) > "" Then
+            '在下拉数据窗口中，按照制定的列进行检索，如果找到此值，设置其界面显示
+            
+            childdw.webdwData.InitData g_webdw.column_dddw_data(id)
+            
+            Dim rowid As Long
+            Dim sourcecolid As Long
+            Dim displaycolid As Long
+            
+            sourcecolid = childdw.webdwData.GetColIdByName(g_webdw.column(id).dddw.DataColumn)
+            displaycolid = childdw.webdwData.GetColIdByName(g_webdw.column(id).dddw.DisplayColumn)
+            
+            If sourcecolid > 0 And displaycolid > 0 Then
+                For rowid = 1 To childdw.DW_RowCount
+                    If childdw.webdwData.GetItemString(rowid, sourcecolid) = svalue Then
+                        obj.text = childdw.webdwData.GetItemString(rowid, displaycolid)
+                        Exit For
+                    End If
+                Next
+            End If
+            
+            'iret = childdw.DW_SetDataObject(targetControls, childPict, g_webdw.column_dddw_syntax(id))
+            'If iret = 0 Then
+            '    iret = childdw.SetData(targetControls, childPict, g_webdw.column_dddw_data(id))
+            '    If iret = 0 Then
+            '        childPict.top = obj.top + obj.height
+            '        childPict.Left = obj.Left
+            '        childPict.Visible = True
+            '    End If
+            'End If
+
+        
+        End If
+        '------------------------下拉数据窗口编辑风格的支持结束---------------------------------
+        
+continueNext:
+    Next
+End Function
+'类的初始化方法
+Private Sub Class_Initialize()
+    '初始化时设置controlSeg值
+    controlSeg = 0
+    Set webdw = New CWebDWUI_FromString                 '设置webdw的存储对象
+    Set webdwReader = New CWebDWUI_GetSelectSQL         '设置webdw的读取对象
+    Set webdwData = New CWebDWData                      '设置webdw的数据对象
+    Set webdwcolor = New CWebDWUI_Color                 '设置webdw的颜色管理对象
+    Set sqlca = New CWebDWTransaction                   '事务管理对象
+    Set webdwWriter = New CWebDWUI_ToString             '写入类对象，从webdw写出
+    Set webdwGener = New CWebDWUI_SyntaxFromSQL         '生成器对象
+    
+    '设置子数据窗口
+    Set childdw = New CWebDWChildDW
+    childdw.SetParentDW Me
+    
+    '初始化界面元素指针
+    initAllObjectPoint
+End Sub
+
+'功能描述：初始化所有指向界面元素的对象指针为Nothing
+'如果调用SetDataObject失败，则初始化所有对象指针
+'在类初始化时也调用这一方法
+Private Function initAllObjectPoint() As Long
+    '初始化各个界面对象的指针指向为Nothing
+    Set targetControls = Nothing
+    Set targetPict = Nothing
+    Set VScroll_Line = Nothing
+    Set VScroll_Page = Nothing
+    Set HScroll_Page = Nothing
+    Set ImagePoint = Nothing
+    Set TextConvertRate = Nothing
+
+End Function
+
+
+'根据x,y的位置来判断当前的控件位置
+'如果不在任何控件上，返回nothing
+'否则返回控件的引用
+Public Function GetCurrentObj(x As Single, y As Single, ByRef controlId As Long) As Control
+    Dim i As Long
+    Dim curobj As Object
+    Dim d1 As Double
+    Dim d2 As Double
+    Dim oldid As Long
+    oldid = controlId
+    
+    For i = 1 To 10000
+        Set curobj = myControls(i)
+        If curobj Is Nothing Then
+            GoTo continueNext
+        End If
+        
+        If TypeName(curobj) = "Line" Then
+            GoTo continueNext
+        End If
+        
+        If x > curobj.Left - 20 And x < curobj.Left + curobj.width + 20 _
+         And y > curobj.top - 20 And y < curobj.top + curobj.height + 20 Then
+            'TODO:精确的判断用户要进入的到底是那个按钮控件
+            '这一功能留到以后来具体完成
+         Set GetCurrentObj = curobj
+         controlId = i
+         Exit Function
+        End If
+        
+continueNext:
+    Next i
+    Set GetCurrentObj = Nothing
+    controlId = 0
+End Function
+
+'功能描述：给出一个控件id号
+'判断是否是下拉编辑框，如果是，取得编辑框数据并返回,设置标志为0
+'如果不是，返回空字符串,设置标志为-1
+
+'Public Function GetDdlbList(controlId As Long, ByRef iflag As Long) As String
+'    Dim id As Long
+'    Dim colName As String
+'    Dim colid As Long
+'
+'    iflag = -1
+'    GetDdlbList = ""
+'    If myControls(controlId) Is Nothing Then
+'        Exit Function
+'    End If
+'
+'    id = controlId - webdw.getLableNum()
+'    colName = g_webdw.column(id).name
+'
+'    For colid = 1 To 100
+'        If g_webdw.table.columns(colid).name = colName Then
+'            GetDdlbList = g_webdw.table.columns(colid).values
+'            iflag = 0
+'            Exit Function
+'        End If
+'    Next
+'
+'End Function
+'利用sData来填充数据窗口
+'Private Function FillData(targetControls As Variant, pictTarget As PictureBox, sData As String) As Long
+'    Dim sDataArray As Variant
+'    Dim vline As Variant
+'    Dim sline As String
+'    Dim lineId As Long
+'    Dim colarray As Variant
+'    Dim sdarray As Variant
+'    Dim sdd As Variant
+'    Dim sdd1 As String
+'    Dim controlName As String
+'    Dim obj As Control
+'    Dim id As Long
+'    Dim allcol() As String
+'
+'    sDataArray = Split(sData, "" & Chr(13) & Chr(10)) '利用回车符号进行分解
+'    lineId = 0
+'    For Each vline In sDataArray
+'        sline = vline                                      '读出一行
+'        If lineId = 0 Then
+'             allcol = Split(sline, Chr(9))             '按chr(9)来分解成列
+'        Else
+'             sdarray = Split(sline, Chr(9))              '按chr(9)来分解列
+'            id = 0
+'            For Each sdd In sdarray
+'                sdd1 = sdd                                  '列的数据
+'                controlName = pictTarget.name & "_" & lineId _
+'                            & "_" & allcol(id)
+'                id = id + 1
+'                Set obj = targetControls(controlName)
+'                If Not obj Is Nothing Then
+'                    obj.text = sdd1
+'                End If
+'            Next
+'        End If
+'
+'        lineId = lineId + 1
+'    Next
+'
+'End Function
+'初始化DW的方法，这个方法用来在程序开始时初始化指定的数据窗口
+'数据窗口实际上是一个PictureBox控件
+'利用程序在这个PictureBox上面进行必要的绘图操作出来的
+'targetControls : 目标窗体，或者用户控件的控件集合
+'targetPict     : 目标picturebox,本程序在一个picturebox上进行绘图
+'vscroll        : targetPict对应的vscrollbar，这个vscrollbar表示当前的开始行(beginRowId)
+'sUIDesc        : sUIDesc代表用户界面的字符串表示
+'sData          : sData代表给定的数据表示
+
+'Private Function initDW(targetControls As Variant, targetPict As PictureBox, _
+'                        vscroll As VScrollBar, Hscroll As HScrollBar, convertRate As Double, _
+'                       sUIDesc As String, sdata As String) As Long
+'   这一方法已经被废弃掉，新的方法是SetDataObject,SetData的组合
+'    Dim iret As Long
+'    Dim totalheight As Long             '总共的高度
+'    Dim maxwidth As Long                '最大的宽度
+'    Dim rowid As Long
+'    Dim colid As Long
+'
+'    'step1:初始化界面表示,初始化完毕以后，界面信息存储在g_webdw里面了
+'    iret = webdw.ConvertDW(sUIDesc)
+'
+'    If iret = -1 Then                   '如果发生错误，截获错误，抛出错误（异常?）
+'        initDW = -1
+'        errString = webdw.errString
+'        Exit Function
+'    End If
+'
+'    'step2:初始化数据表示，初始化完毕后，实际数据存储在webdwData里面了，可以通过方法来访问
+'    iret = webdwData.InitData(sdata)
+'
+'    If iret = -1 Then                   '如果发生错误，截获错误，抛出错误（异常?）
+'        initDW = -1
+'        errString = webdwData.errString
+'        Exit Function
+'    End If
+'
+'    'step3:计算逻辑高度，根据需要设置VscrollBar的数据
+'    totalheight = g_webdw.header.height _
+'                + g_webdw.detail.height * webdwData.GetRowCount() _
+'                + g_webdw.footer.height
+'    totalheight = totalheight / convertRate         '坐标逻辑转换比例
+'
+'    If totalheight > targetPict.height Then       '如果逻辑高度大于物理高度，则设置滚动条
+'        vscroll.Min = 0
+'        vscroll.Max = (totalheight - targetPict.height) / g_webdw.detail.height * convertRate + 1
+'        vscroll.SmallChange = 1                                        '翻记录
+'        If targetPict.height * convertRate > g_webdw.detail.height Then
+'            vscroll.LargeChange = targetPict.height / g_webdw.detail.height * convertRate '翻页
+'        Else
+'            vscroll.LargeChange = 1
+'        End If
+'        vscroll.Value = 0
+'        vscroll.Enabled = True
+'    Else
+'        vscroll.Enabled = False
+'        vscroll.Max = 0
+'        vscroll.Min = 0
+'        vscroll.Value = 0
+'    End If
+'
+'    '根据最大宽度来设置hscroll的属性
+'    maxwidth = getMaxWidth() / convertRate
+'    '因为可能多次进入，因此只有当max=0时才进行判断调整
+'    If Hscroll.Max = 0 Then
+'        If maxwidth <= targetPict.width Then
+'            Hscroll.Min = 0
+'            Hscroll.Max = 0
+'            Hscroll.Value = 0
+'            Hscroll.Enabled = False
+'        Else
+'            Hscroll.Min = 0
+'            Hscroll.Max = (maxwidth - targetPict.width) / 500 + 1
+'            targetPict.width = maxwidth
+'            Hscroll.Enabled = True
+'        End If
+'    End If
+'    '绘制图形出来
+'    DrawDW targetControls, targetPict                     '从第一行开始绘制
+'
+'End Function
+
+'从一个targetControls容器中，根据给定控件名称来检索控件
+'如果控件不存在，则返回Nothing
+Public Function getObjectByName(objName As String) As Control
+    Dim obj As Control
+    Set obj = Nothing
+    
+    Dim vobj As Variant
+    For Each vobj In targetControls
+        If UCase(vobj.Name) = UCase(objName) Then
+            Set obj = vobj
+            Exit For
+        End If
+    Next
+    
+    Set getObjectByName = obj
+End Function
+
+'设置dataobject对象，dataobject对象用一个字符串来描述
+'这是一个新实现的方法，这个方法中不再传递vscroll,hscroll这些对象
+'而是通过其名称来进行访问
+Public Function DW_SetDataObject(targetControlsArg As Variant, targetPictArg As PictureBox, _
+                             sUIDesc As String) As Long
+    
+    Dim convertrate As Double
+    'step1: 设置对象的连接
+    '首先把对象和界面上的控件连接起来
+    '确保这些对象是实际存在的
+    '为了简化程序的结构，目前暂不考虑动态生成这些所有控件
+    
+    'step1.设置targetControls和targetPict这两个变量
+    If targetControlsArg Is Nothing Then
+        errString = "Cannot set targetControls"
+        GoTo SETDATAOBJECTERROR
+    End If
+    
+    If targetPictArg Is Nothing Then
+        errString = "Cannot set targetPict"
+        GoTo SETDATAOBJECTERROR
+    End If
+    
+    Set targetControls = targetControlsArg
+    Set targetPict = targetPictArg
+    
+    'step1.2 set vscroll_page
+    Set VScroll_Page = getObjectByName(targetPict.Name & "_Vscroll_Page")
+    If VScroll_Page Is Nothing Then
+        errString = "Cannot find Vscroll_Page"
+        GoTo SETDATAOBJECTERROR
+    End If
+    
+    'step1.3 set vscroll_line
+    Set VScroll_Line = getObjectByName(targetPict.Name & "_Vscroll_Line")
+    If VScroll_Line Is Nothing Then
+        errString = "Cannot find Vscroll_Line"
+        GoTo SETDATAOBJECTERROR
+    End If
+    
+    'step1.4 set hscroll_page
+    Set HScroll_Page = getObjectByName(targetPict.Name & "_HScroll_Page")
+    If HScroll_Page Is Nothing Then
+        errString = "Cannot find HScroll_Page"
+        GoTo SETDATAOBJECTERROR
+    End If
+    
+    'step1.5 set ImagePoint，代表当前行标示的图标
+    Set ImagePoint = getObjectByName(targetPict.Name & "_ImagePoint")
+    If ImagePoint Is Nothing Then
+        errString = "Cannot find ImagePoint"
+        GoTo SETDATAOBJECTERROR
+    End If
+    
+    'step1.6 set TextConvertRate
+    Set TextConvertRate = getObjectByName("TextConvertRate")
+    If TextConvertRate Is Nothing Then
+        errString = "Cannot find TextConvertRate"
+        GoTo SETDATAOBJECTERROR
+    End If
+    
+    Set childPict = getObjectByName("PictureChild")
+    If childPict Is Nothing Then
+        errString = "Cannot find PictureChild"
+        GoTo SETDATAOBJECTERROR
+    End If
+    
+    
+    
+    'step1.7 得到界面定义文件和界面元素之间的转换比例定义
+    convertrate = getConvertRate()
+    
+    
+    'step2:初始化界面表示,初始化完毕以后，界面信息存储在g_webdw里面了
+    Dim iret As Long
+    Dim columnString As String
+    iret = webdw.ConvertDW(sUIDesc)
+    
+    If iret = -1 Then                   '如果发生错误，截获错误，抛出错误（异常?）
+        errString = webdw.errString
+        GoTo SETDATAOBJECTERROR
+    End If
+    
+    '如果初始化成功，那么需要通过公用变量GG_webdw来进行数据传输
+    webdw.GetWebDW          '设置gg_webdw的数值
+    SetWebDW                '设置本地g_webdw的数值
+    webdwReader.SetWebDW    '设置reader的g_webdw
+    webdwWriter.SetWebDW    '设置writer的g_webdw
+    
+    'step3:初始化数据存储，初始化完毕后，实际数据存储在webdwData里面了，可以通过方法来访问
+    columnString = webdw.GetColumnDefineString
+    iret = webdwData.InitData(columnString)       '用列字符串来进行初始化,否则插入时不能成功
+    
+    If iret = -1 Then                   '如果发生错误，截获错误，抛出错误（异常?）
+        errString = webdwData.errString
+        GoTo SETDATAOBJECTERROR
+    End If
+    
+    'step4:设置VscrollBar,HscrollBar
+    VScroll_Line.Max = 0
+    VScroll_Line.Min = 0
+    VScroll_Line.value = 0
+    VScroll_Line.Visible = True
+    
+    VScroll_Page.Max = 0
+    VScroll_Page.Min = 0
+    VScroll_Page.value = 0
+    VScroll_Page.Visible = True
+    
+    
+    '根据最大宽度来设置hscroll的属性
+    Dim maxwidth As Long
+    maxwidth = getMaxWidth() / convertrate
+    If maxwidth <= targetPict.width Then
+        HScroll_Page.Min = 0
+        HScroll_Page.Max = 0
+        HScroll_Page.value = 0
+        HScroll_Page.Enabled = False
+    Else
+        HScroll_Page.Min = 0
+        HScroll_Page.Max = (maxwidth - targetPict.width) * 2 / targetPict.width + 1
+        HScroll_Page.SmallChange = 1
+        HScroll_Page.largechange = 2
+        'targetPict.width = maxwidth
+        HScroll_Page.Enabled = True
+    End If
+    
+    '调用方法，如果是下拉式数据窗口，配置读取信息
+    RetrieveChildDW         '检索所有的子窗口
+    
+    'step 5绘制图形出来
+    currentRow = 0
+    DrawDW                  '从第一行开始绘制
+    
+    DW_SetDataObject = 0    '正常退出
+    Exit Function
+    
+SETDATAOBJECTERROR:         '错误处理代码
+    initAllObjectPoint      '初始化所有对象指针为Nothing
+    DW_SetDataObject = -1   '发生错误
+
+End Function
+
+
+'绘制DW的方法,begId代表开始绘制的一行.begId>0
+'targetControls: 目标控件的集合 输入
+'targetPict:    要绘制的目标图片框 输入
+Public Function DrawDW() As Long
+    If targetControls Is Nothing Or targetPict Is Nothing Then
+        DrawDW = -1
+        errString = "Please Call SetDataObject First"
+        Exit Function
+    End If
+
+    Dim rowid As Long
+    Dim iret As Long
+    Dim i As Long
+    Dim childid As Long
+    Dim linetop As Long
+    Dim leftPos As Long '左偏移量，根据vscrollbar来计算
+    
+    Dim beginRowId As Long
+    
+    If VScroll_Line Is Nothing Then
+        DrawDW = -1
+        errString = "Please call SetDataObject() first"
+        Exit Function
+    End If
+    
+    
+    'step1 从界面上读取横向滚动条和纵向滚动条
+    beginRowId = VScroll_Line.value + 1             '开始点是当前的Value+1
+    
+    Dim convertrate As Double                       '转换比例
+    convertrate = getConvertRate()                  '从界面上得到转换比例
+    
+    leftPos = HScroll_Page.value * targetPict.width * convertrate * -0.5
+    
+    'step1 设置beginRowId,
+    '这个变量在drawLabel,drawColumn,drawLine三个函数中要使用
+    'beginRowId = begId
+    
+    'step2 删除所有控件
+    For i = 10000 To 1 Step -1
+        If Not (myControls(i) Is Nothing) Then            '这个判断是一个安全性判断，以避免异常情况发生
+            '由于有些控件本身是在另外一个控件内创建的，所以需要加上额外判断，先删除子控件
+            'If TypeOf myControls(i) Is VB.Frame Then
+            '    For childid = 1 To 4
+            '        If (Not (myControls(i + childid) Is Nothing)) Then
+            '            If TypeOf myControls(i + childid) Is VB.OptionButton Then
+            '                targetControls.Remove (myControls(i + childid).name)    '删除子控件先
+            '                Set myControls(i + childid) = Nothing
+            '            End If
+            '        End If
+            '    Next
+            'End If
+            targetControls.Remove (myControls(i).Name)
+            Set myControls(i) = Nothing
+        End If
+    Next
+    controlSeg = 0                                         '复位序列对象
+    
+    'step3绘制表头
+        iret = drawLabel(targetControls, targetPict, convertrate, 0, leftPos)
+        iret = drawColumn(targetControls, targetPict, convertrate, 0, leftPos)
+        iret = drawLine(targetControls, targetPict, convertrate, 0, leftPos)
+    
+    'step4 重新绘制表体
+    For rowid = beginRowId To webdwData.GetRowCount()
+        linetop = g_webdw.header.height + g_webdw.detail.height * (rowid - beginRowId)
+        If linetop > targetPict.height * convertrate Then    '如果行的开头已经超过了targetPict，停止绘制
+            Exit For
+        End If
+        
+        iret = drawLabel(targetControls, targetPict, convertrate, rowid, leftPos) '绘制这一行的Label
+        iret = drawColumn(targetControls, targetPict, convertrate, rowid, leftPos) '绘制这以行的Column
+        iret = drawLine(targetControls, targetPict, convertrate, rowid, leftPos) '绘制这一行的Line
+    Next rowid
+    
+    'step5.绘制targetPict的底色
+    targetPict.BackColor = webdwcolor.getVBColor( _
+                    g_webdw.detail.color, 256# * 256 * 256 - 1)
+                    
+    'step6.根据当前行，在前面设置一个图标
+    DrawDW_ImageOnly
+    
+End Function
+
+'绘制图形的方法，只不过这个方法只绘制当前行指示符号而已
+Private Function DrawDW_ImageOnly() As Long
+    'step6.根据当前行，在前面设置一个图标
+    If currentRow > 0 Then
+        If currentRow > VScroll_Line.value Then
+            ImagePoint.top = g_webdw.header.height + g_webdw.detail.height * (currentRow - VScroll_Line.value - 1)
+            ImagePoint.Visible = True
+        Else
+            ImagePoint.top = g_webdw.header.height + g_webdw.detail.height * (currentRow - VScroll_Line.value - 1)
+            ImagePoint.Visible = False
+        End If
+        
+        '根据当前数据窗口的高度，来判断是否要覆盖显示
+        If g_webdw.detail.height > 200 Then '可能是单行显示，待完善
+            ImagePoint.width = 100
+        Else
+            ImagePoint.width = targetPict.width '多行显示的情况
+        End If
+    
+    Else
+        ImagePoint.Visible = False
+    End If
+    
+    DrawDW_ImageOnly = 1
+End Function
+
+'在界面上画线的方法
+'通过这个方法支持在界面上进行画线
+'leftpos 左偏移量 leftpos<=0
+Private Function drawLine(targetControls As Variant, targetPict As PictureBox, _
+                            convertrate As Double, lineNum As Long, _
+                            Optional leftPos As Long = 0) As Long
+    Dim id As Long
+    Dim sname As String
+    Dim obj As Control
+    Dim top As Long
+    Dim beginRowId As Long
+    beginRowId = VScroll_Line.value + 1
+    
+    For id = 1 To 100
+        If g_webdw.lineinfo(id).Name = "" Then
+            drawLine = 0
+            Exit Function
+        End If
+        
+        If lineNum = 0 And g_webdw.lineinfo(id).band <> "header" Then    '绘制头部，band不为header,退出
+            GoTo continueNext
+        End If
+        
+        If lineNum > 0 And g_webdw.lineinfo(id).band <> "detail" Then   '绘制细节，band不为detail,退出
+            GoTo continueNext
+        End If
+        
+        '先计算标签的top值，以此来判断是否需要继续创建对象并绘制之
+        If g_webdw.lineinfo(id).band = "header" Then top = g_webdw.lineinfo(id).y1
+        If g_webdw.lineinfo(id).band = "detail" Then
+            top = g_webdw.lineinfo(id).y1 _
+                        + g_webdw.header.height _
+                        + g_webdw.detail.height * (lineNum - beginRowId)
+        End If
+                    
+        '根据top值进行判断，如果这个值超过了targetPict的范围，就跳出本次循环
+        If top <= 0 Or top > targetPict.height Then
+            GoTo continueNext
+        End If
+        
+        If top >= 0 And top <= g_webdw.header.height And g_webdw.lineinfo(id).band <> "header" Then
+            GoTo continueNext
+        End If
+        
+        '根据x1,x2判断是否要划线出来
+        If g_webdw.lineinfo(id).x1 + leftPos < 0 And _
+            g_webdw.lineinfo(id).x2 + leftPos < 0 Then
+            GoTo continueNext
+        End If
+        
+        If g_webdw.lineinfo(id).x1 + leftPos > targetPict.width * convertrate And _
+            g_webdw.lineinfo(id).x2 + leftPos > targetPict.width * convertrate Then
+            GoTo continueNext
+        End If
+        
+        controlSeg = controlSeg + 1
+        sname = targetPict.Name & "_" & lineNum _
+                    & "_" & g_webdw.lineinfo(id).Name
+        
+        Set obj = targetControls.Add("VB.Line", sname, targetPict)
+        Set myControls(controlSeg) = obj                    '存储对于控件的引用
+         
+        
+        With obj
+            .y1 = top
+            .x1 = g_webdw.lineinfo(id).x1 + leftPos     '加上偏移量
+            .x2 = g_webdw.lineinfo(id).x2 + leftPos     '加上偏移量
+            .y2 = g_webdw.lineinfo(id).y2 + top - g_webdw.lineinfo(id).y1
+        End With
+        obj.Visible = True
+    
+continueNext:
+    Next
+
+End Function
+
+'得到界面的最大宽度，用这个宽度来设置横向滚动条的位置等信息
+Private Function getMaxWidth() As Long
+    Dim i As Long
+    Dim imax As Long
+    imax = 0
+    '循环读取label的最大宽度
+    For i = 1 To 100
+        If g_webdw.text(i).Name = "" Then
+            Exit For
+        End If
+        
+        If g_webdw.text(i).x + g_webdw.text(i).width > imax Then
+            imax = g_webdw.text(i).x + g_webdw.text(i).width
+        End If
+    Next
+    
+    '循环读取text的最大宽度
+    For i = 1 To 100
+        If g_webdw.column(i).Name = "" Then
+            Exit For
+        End If
+        
+        If g_webdw.column(i).x + g_webdw.column(i).width > imax Then
+            imax = g_webdw.column(i).x + g_webdw.column(i).width
+        End If
+    Next
+    
+    '循环读取line的最大右坐标
+    For i = 1 To 100
+        If g_webdw.lineinfo(i).Name = "" Then
+            Exit For
+        End If
+        
+        If g_webdw.lineinfo(i).x1 > imax Then imax = g_webdw.lineinfo(i).x1
+        If g_webdw.lineinfo(i).x2 > imax Then imax = g_webdw.lineinfo(i).x2
+    Next
+    
+    getMaxWidth = imax
+End Function
+
+
+'数据窗口的检索功能，等价功能dw.Retrieve()
+'前提条件是已经设置了datawindow对象
+'args是检索调用的参数，各个参数之间用TAB键分割
+'20090116对参数进行修改，targetControls和targetPict不再需要外部传入
+Public Function DW_Retrieve(Optional args As String = "") As Long
+    
+    '先判断targetControls和targetPict已经正常赋值
+    If targetControls Is Nothing Or targetPict Is Nothing Then
+        DW_Retrieve = -1
+        errString = "Please Call SetDataObject First."
+        Exit Function
+    End If
+    
+    Dim strsql As String
+    Dim sData As String
+    Dim argArray As Variant
+    Dim arg As Variant
+    Dim sarg As String
+    Dim argid As Long
+    Dim iret As Long
+    
+      
+    
+    strsql = webdwReader.GetRetrieveSQL()           '得到检索用的SQL语句
+    
+    '替换各个自定义变量
+    argArray = Split(args, "" & Chr(9))
+    argid = 1
+    For Each arg In argArray
+        sarg = arg
+        strsql = Replace(strsql, ":arg" & argid, sarg)
+        argid = argid + 1
+    Next
+    
+    sqlca.opertype = 1
+    sqlca.beginPos = 0
+    sqlca.readNum = 1000
+    sqlca.command = strsql
+    sData = sqlca.ExecuteSelect(iret)              '执行sql,得到数据结果
+    
+    If iret = -1 Then
+        DW_Retrieve = -1
+        errString = sqlca.errString
+        Exit Function
+    End If
+    '利用新数据，初始化数据窗口
+     SetData sData
+     DrawDW
+    
+End Function
+
+'功能描述：给定一个控件集合，从中检索，以得到控件指定的缩放比例
+'返回缩放比例
+'增加这个函数的目的是为了在调用时不再传递缩放比例
+'要正确使用缩放比例，要求界面上有一个名为TextConvertRate的文本框对象
+'这个文本框对象目前已经定义为CWebDWUI的一个指针对象TextConvertRate,属于必须对象
+Private Function getConvertRate() As Double
+    Dim convertrate As Double
+    
+    convertrate = TextConvertRate.text  '获取设置值
+    If convertrate <= 0 Or convertrate >= 1 Then
+        convertrate = 0.25
+    End If
+    
+    getConvertRate = convertrate
+End Function
+
+'利用给定的数据，来初始化数据存储
+'targetControls 控件的集合
+'pictTarget     要绘图的控件
+'indata         重新设置的数据
+'datastate      可选项,数据的状态,默认为"normal"
+Public Function SetData(indata As String, _
+                        Optional datastate As String = "normal") As Long
+    Dim iret As Long
+    Dim convertrate As Double
+    Dim largechange As Long
+    
+    '增加判断，如果没有初始化，则不执行
+    If targetControls Is Nothing Then
+        SetData = -1
+        errString = "Please Call SetDataObject() first!"
+        Exit Function
+    End If
+    
+    convertrate = getConvertRate()                  '得到转换比例
+    
+    iret = webdwData.InitData(indata, datastate)
+    
+    If iret = -1 Then
+        MsgBox webdwData.errString
+        Exit Function
+    End If
+    
+    If webdwData.GetRowCount() > 0 Then
+        VScroll_Line.Max = webdwData.GetRowCount() - 1
+        VScroll_Line.Min = 0
+        VScroll_Line.SmallChange = 1
+        largechange = (targetPict.height * convertrate - g_webdw.header.height _
+                                    - g_webdw.footer.height) / g_webdw.detail.height
+        If largechange < 1 Then
+            VScroll_Line.largechange = 1
+        Else
+            VScroll_Line.largechange = largechange
+        End If
+        VScroll_Line.Enabled = True
+    Else
+        VScroll_Line.Max = 0
+        VScroll_Line.Min = 0
+        VScroll_Line.value = 0
+        VScroll_Line.Enabled = False
+    End If
+    
+    If webdwData.GetRowCount() > 0 And currentRow = 0 Then
+        currentRow = 1
+    End If
+    
+    If webdwData.GetRowCount() = 0 Then
+        currentRow = 0
+    End If
+    
+End Function
+'功能描述：删除当前行
+'返回0 成功
+'返回-1 发生错误
+Public Function DW_DeleteRow(rowid As Long) As Long
+    '逻辑判断，调用前先初始化数据窗口控件
+    If targetControls Is Nothing Or targetPict Is Nothing Then
+        DW_DeleteRow = -1
+        errString = "Please Call SetDataObject First."
+        Exit Function
+    End If
+
+    '如果传入参数小于等于0，直接退出
+    If rowid <= 0 Then
+        DW_DeleteRow = 0
+        Exit Function
+    End If
+    
+    Dim iret As Long
+    iret = webdwData.DeleteRow(rowid)
+    
+    '删除数据时发生错误，退出
+    If iret = -1 Then
+        DW_DeleteRow = -1
+        errString = webdwData.errString
+        Exit Function
+    End If
+    
+    '设置滚动条的最大值
+    If VScroll_Line.Max > 0 Then
+        VScroll_Line.Max = VScroll_Line.Max - 1
+    End If
+    
+    '如果界面的当前行已经溢出，重新设置，如果数据为空，当前行为0
+    If currentRow > webdwData.GetRowCount Then
+        currentRow = webdwData.GetRowCount
+    End If
+    
+    DrawDW                             '刷新数据
+    
+End Function
+'功能描述：得到当前行
+'要得到当前行，需要传入当前所在对象的ID号
+Public Function DW_GetRow() As Long
+    '先判断targetControls和targetPict已经正常赋值
+    If targetControls Is Nothing Or targetPict Is Nothing Then
+        DW_GetRow = -1
+        errString = "Please Call SetDataObject First."
+        Exit Function
+    End If
+    
+    DW_GetRow = currentRow
+End Function
+'设置当前行
+Public Function DW_SetRow(rowid As Long) As Long
+    If rowid > 0 And rowid <= DW_RowCount() Then
+        currentRow = rowid
+        DW_SetRow = 1           '返回1代表成功
+    Else
+        DW_SetRow = -1          '返回-1代表失败
+    End If
+End Function
+
+'根据给定的当前控件的名字，判断当前所在列的序号
+'返回-1代表失败，>=0代表序号
+Public Function GetRowIdColumnId(currentControlName As String, _
+                                    ByRef rowid As Long, ByRef colid As Long) As Long
+    If currentControlName = "" Then
+        GetRowIdColumnId = -1
+        Exit Function
+    End If
+    
+    Dim pos1 As Long
+    Dim pos2 As Long
+    Dim pos3 As Long
+    pos1 = InStr(1, currentControlName, "__")                    '第一个双下划线的位置
+    If pos1 <= 0 Then
+        GetRowIdColumnId = -1
+        Exit Function
+    End If
+        
+    pos2 = InStr(pos1 + 1, currentControlName, "__")             '第二个双下划线的位置
+    If pos2 <= 0 Then
+        GetRowIdColumnId = -1
+        Exit Function
+    End If
+    
+    pos3 = InStr(pos2 + 1, currentControlName, "__")              '第三个双下划线的位置（可能没有)
+    
+    rowid = Mid(currentControlName, pos1 + 2, pos2 - pos1 - 2)  '得到行号
+    
+    Dim columnName As String
+    If pos3 > 0 Then
+        columnName = Mid(currentControlName, pos2 + 2, pos3 - pos2 - 2) '得到列名
+    Else
+        columnName = Mid(currentControlName, pos2 + 2)             '得到列名
+    End If
+        
+    colid = GetColumnIdByColumnName(columnName)                 '得到列号
+    GetRowIdColumnId = 0
+End Function
+
+'根据给定的columnname，计算返回的列编号(1 based)
+Public Function GetColumnIdByColumnName(colname As String) As Long
+    Dim colid As Long
+    For colid = 1 To 100
+        If UCase(colname) = UCase(g_webdw.column(colid).Name) Then
+            GetColumnIdByColumnName = colid
+            Exit Function
+        End If
+    Next
+    GetColumnIdByColumnName = -1
+End Function
+
+'设置数据,只能设置PrimaryBuffer的数据
+Public Function SetItemString(rowid As Long, colid As Long, sData As String) As String
+    webdwData.SetItemString rowid, colid, sData
+End Function
+
+'得到最近要提交到后台的更新数据库的命令集合
+'多条命令之间用chr(13)chr(10)来分隔
+'目前仅支持单表的更新操作所需要的SQL命令
+Public Function DW_GetSQLPreview(ByRef iret As Long) As String
+        
+    'step1 检查是否进行了初始化
+    '先判断targetControls和targetPict已经正常赋值
+    If targetControls Is Nothing Or targetPict Is Nothing Then
+        DW_GetSQLPreview = ""
+        iret = -1
+        errString = "Please Call SetDataObject First."
+        Exit Function
+    End If
+    
+        
+    Dim stable As String    '数据表名称
+    
+    If g_webdw.table.retrieve.pbselect.table(2) <> "" Then  '目前仅支持单表，如果是多表，退出
+        iret = 0
+        DW_GetSQLPreview = ""
+        Exit Function
+    End If
+    
+    If g_webdw.table.retrieve.pbselect.table(1) = "" Then   '如果第一个表名为空，退出
+        iret = -1
+        DW_GetSQLPreview = ""
+        errString = "ERROR: no table define"
+        Exit Function
+    End If
+    
+    stable = g_webdw.table.retrieve.pbselect.table(1)
+    stable = Replace(stable, "~" & """", "")                '得到表名，替换掉其中的~"
+    
+    DW_GetSQLPreview = webdwData.GetUpdateSql(stable, iret)
+       
+End Function
+
+'执行Dw的Update方法,更新数据
+'返回0代表调用成功
+'返回-1代表调用发生错误
+'将targetControls,targetPict都从参数中去掉
+Public Function DW_Update() As Long
+    
+    'step1 判断是否初始化
+    If targetControls Is Nothing Or targetPict Is Nothing Then
+        DW_Update = -1
+        errString = "Please Call SetDataObject First."
+        Exit Function
+    End If
+
+    Dim strsql As String
+    Dim sData As String
+    Dim iret As Long
+    
+    'step1 得到UpdateSQL
+    strsql = DW_GetSQLPreview(iret)
+    
+    If iret = -1 Then
+        DW_Update = -1
+        Exit Function
+    End If
+    
+    'step2 提交SQL命令
+    '此处需要进行修正，数据窗口不可直接提交
+    '必须通过sqlca的commit方法提交，
+    
+    
+    sqlca.opertype = 2      '执行update方法
+    sqlca.beginPos = 0
+    sqlca.readNum = 1000
+    sqlca.command = Replace(strsql, "" & Chr(13) & Chr(10), "----------")
+    sData = sqlca.ExecuteUpdate(iret)              '执行sql,得到数据结果
+    
+    If iret = -1 Or sqlca.errString > "" Then
+        iret = -1
+        DW_Update = -1
+        errString = sqlca.errString
+        Exit Function
+    End If
+    
+    '更新数据库成功以后，应当把数据的状态改掉
+    '调用webdwdata中的方法
+    '目前下面的流程都走不到，需要进行修改
+    webdwData.AfterUpdate
+    
+    DW_Update = 0   '正常退出
+    
+End Function
+
+'得到当前DataWindow内的记录总数
+'返回-1代表失败
+'正常情况返回值>=0
+Public Function DW_RowCount() As Long
+    'step1 判断是否初始化
+    If targetControls Is Nothing Or targetPict Is Nothing Then
+        DW_RowCount = -1
+        errString = "Please Call SetDataObject First."
+        Exit Function
+    End If
+    
+    DW_RowCount = webdwData.GetRowCount
+End Function
+
+'在数据窗口中插入一条记录，返回这条记录的当前行号，如果出错，返回-1
+'rowid代表要插入的行号，如果为0代表在最后插入
+Public Function DW_InsertRow(rowid As Long) As Long
+    'step1 判断是否初始化
+    If targetControls Is Nothing Or targetPict Is Nothing Then
+        DW_InsertRow = -1
+        errString = "Please Call SetDataObject First."
+        Exit Function
+    End If
+
+    Dim emptystring As String
+    Dim colid  As Long
+    Dim colNum As Long
+    colNum = webdwData.GetColumnNumber
+    emptystring = ""
+    For colid = 1 To colNum
+        If emptystring = "" Then
+            emptystring = " "
+        Else
+            emptystring = emptystring & Chr(9) & ""
+        End If
+    Next
+    
+    Dim iret As Long
+    iret = webdwData.InsertRow(rowid, emptystring)
+    
+    If iret = -1 Then
+        errString = webdwData.errString
+    Else
+        VScroll_Line.Max = VScroll_Line.Max + 1
+    End If
+    
+    DW_InsertRow = iret
+    
+    DrawDW
+End Function
+
+'设置当前的文本框对象，以使之可以响应外部事件
+Public Function SetTextBox(textArg As TextBox) As Long
+    Dim iret As Long
+    Dim rowid As Long
+    Dim colid As Long
+    
+    iret = GetRowIdColumnId(textArg.Name, rowid, colid)
+    If iret = 0 Then
+        If rowid <> currentRow Then
+            currentRow = rowid
+            DrawDW_ImageOnly
+        End If
+    End If
+
+    Set myTextBox = textArg
+    'myTextBox_Click
+End Function
+
+'设置当前的单选框对象，以使之可以响应外部事件
+Public Function SetOptionButton(OptionButtonArg As OptionButton) As Long
+    Dim iret As Long
+    Dim rowid As Long
+    Dim colid As Long
+    
+    iret = GetRowIdColumnId(OptionButtonArg.Name, rowid, colid)
+    If iret = 0 Then
+        If rowid <> currentRow Then
+            currentRow = rowid
+            DrawDW_ImageOnly
+        End If
+    End If
+
+
+    Set myOptionButton = OptionButtonArg
+End Function
+
+'设置当前的复选框对象，使之可以响应外部事件
+Public Function SetCheckBox(checkArg As checkbox) As Long
+    Dim iret As Long
+    Dim rowid As Long
+    Dim colid As Long
+    
+    iret = GetRowIdColumnId(checkArg.Name, rowid, colid)
+    If iret = 0 Then
+        If rowid <> currentRow Then
+            currentRow = rowid
+            DrawDW_ImageOnly
+        End If
+    End If
+
+    Set myCheckBox = checkArg
+End Function
+
+'设置当前的下拉框对象，使之可以响应外部事件
+Public Function SetComboBox(comboArg As combobox) As Long
+    Dim iret As Long
+    Dim rowid As Long
+    Dim colid As Long
+    
+    iret = GetRowIdColumnId(comboArg.Name, rowid, colid)
+    If iret = 0 Then
+        If rowid <> currentRow Then
+            currentRow = rowid
+            DrawDW_ImageOnly
+        End If
+    End If
+
+    Set myComboBox = comboArg
+End Function
+
+
+'单击选择框按钮的操作
+Private Sub myCheckBox_Click()
+    'MsgBox "change", , myTextBox.name
+    Dim iret As Long
+    Dim rowid As Long
+    Dim colid As Long
+    
+    iret = GetRowIdColumnId(myCheckBox.Name, rowid, colid)      '得到行号和列号
+    If iret = 0 Then
+        If myCheckBox.value = 1 Then    '选中状态
+            SetItemString rowid, colid, g_webdw.column(colid).checkbox.on
+        Else                            '未选中状态
+            SetItemString rowid, colid, g_webdw.column(colid).checkbox.off
+        End If
+    End If
+End Sub
+
+'当点击选择框时，更新相应字段内容
+Private Sub myComboBox_Click()
+    Dim iret As Long
+    Dim rowid As Long
+    Dim colid As Long
+    Dim svalue As String    '这个控件代表的属性值
+    Dim pos1 As Long
+    Dim pos2 As Long
+    Dim pos3 As Long
+    Dim allData() As String
+
+    iret = GetRowIdColumnId(myComboBox.Name, rowid, colid)
+    If iret = 0 Then
+    
+        allData = Split(g_webdw.table.Columns(colid).values, "/")
+            
+        If myComboBox.ListIndex >= 0 Then
+            svalue = allData(myComboBox.ListIndex)
+            pos1 = InStr(1, svalue, Chr(9))
+            If pos1 > 0 Then
+                SetItemString rowid, colid, Mid(svalue, pos1 + 1)
+            End If
+        Else
+        
+        End If
+    End If
+End Sub
+
+
+'单击单选按钮的操作
+Private Sub myOptionButton_Click()
+    Dim iret As Long
+    Dim rowid As Long
+    Dim colid As Long
+    
+    iret = GetRowIdColumnId(myOptionButton.Name, rowid, colid)      '得到行号和列号
+    If iret = 0 Then
+        SetItemString rowid, colid, myOptionButton.tag              '从tag里面取出值，设置变量
+    End If
+End Sub
+
+'当文本框数据改变时，将当前数据设置到后面的数据存储去
+Private Sub myTextBox_Change()
+    Dim iret As Long
+    Dim rowid As Long
+    Dim colid As Long
+    
+    iret = GetRowIdColumnId(myTextBox.Name, rowid, colid)
+    If iret = 0 Then
+        SetItemString rowid, colid, myTextBox.text        '设置数据
+    End If
+    
+End Sub
+
+'当在文本框上单击时，设置当前行
+'未来根据元素定义的编辑风格来进行弹出控件设置
+Private Sub myTextBox_Click()
+    Dim iret As Long
+    Dim rowid As Long
+    Dim colid As Long
+    
+    iret = GetRowIdColumnId(myTextBox.Name, rowid, colid)
+    If iret = 0 Then
+        If rowid <> currentRow Then
+            currentRow = rowid
+        End If
+    End If
+    
+    '如果当前列设定的编辑风格是弹出数据窗口
+    If g_webdw.column(colid).dddw.Name > "" And g_webdw.column(colid).dddw.DataColumn > "" _
+       And g_webdw.column(colid).dddw.DisplayColumn > "" And g_webdw.column_dddw_syntax(colid) > "" _
+       And g_webdw.column_dddw_data(colid) > "" Then
+       
+       childdw.DW_SetDataObject targetControls, childPict, g_webdw.column_dddw_syntax(colid)
+       childdw.SetData targetControls, childPict, g_webdw.column_dddw_data(colid)
+       
+       childdw.parentControlName = myTextBox.Name                      '设置父窗口的控件名称
+       childdw.dataColumnName = g_webdw.column(colid).dddw.DataColumn   '设置数据列名称
+       
+       childPict.Left = myTextBox.Left
+       childPict.top = myTextBox.top + myTextBox.height
+       childPict.Visible = True
+       childdw.DrawDW
+       
+       'myTextBox.Enabled = False
+    End If
+    
+    
+End Sub
+
+'输入:g_webdw
+'输出:g_webdw
+'处理：如果存在子数据窗口，检索每个子窗口的定义和数据，填充g_webdw
+Private Function RetrieveChildDW() As Long
+    Dim colid As Long
+    Dim childDWDefine As String
+    Dim childDWData As String
+    Dim iret As Long
+    
+   
+    For colid = 1 To 100
+        childDWDefine = ""
+        childDWData = ""
+        If g_webdw.column(colid).dddw.Name > "" Then
+            sqlca.command = g_webdw.column(colid).dddw.Name     '设置要检索的对象名称
+            
+            childDWDefine = sqlca.GetDWDefine(iret) '检索对象定义
+            
+            If iret = 0 Then '检索对象定义成功
+                'iret = childdw.DW_Retrieve()
+                
+                iret = childdw.DW_SetDataObject(targetControls, childPict, childDWDefine)
+                If iret = 0 Then
+                    If childdw.DW_Retrieve = 0 Then
+                        childDWData = childdw.webdw.GetColumnDefineString()
+                        If childDWData > "" Then
+                            childDWData = childDWData & Chr(13) & Chr(10) _
+                                          & childdw.webdwData.GetAllData()
+                            
+                            g_webdw.column_dddw_syntax(colid) = childDWDefine
+                            g_webdw.column_dddw_data(colid) = childDWData
+                            
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next
+        
+    childdw.SetTargetControls targetControls
+    childdw.setTargetPict childPict
+    
+    childdw.DeleteAllObject '上面只是检索使用，检索完毕以后，删除所有的控件
+    
+    Dim hscroll As HScrollBar
+    Set hscroll = childdw.getObjectByName(childPict.Name & "_HScroll_Page")
+    hscroll.Visible = False
+    
+    Dim vscroll As vscrollbar
+    Set vscroll = childdw.getObjectByName(childPict.Name & "_VScroll_Line")
+    vscroll.Visible = False
+End Function
+
+'调用子数据窗口的刷新方法
+Public Function DrawChildDW() As Long
+    If Not (childdw Is Nothing) Then
+        childdw.DrawDW
+    End If
+    
+End Function
+
+
+

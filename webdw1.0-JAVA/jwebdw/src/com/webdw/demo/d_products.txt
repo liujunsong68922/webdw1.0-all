@@ -1,0 +1,21 @@
+description	name	id	prod_size	color	quantity	unit_price	picture_name
+Tank Top	Tee Shirt	300	Small	White	18	9.00	tshirtw.bmp
+V-neck	Tee Shirt	301	Medium	Orange	39	14.00	tshirto.bmp
+Crew Neck	Tee Shirt	302	One size fits all	Black	72	14.00	tshirtb.bmp
+Cotton Cap	Baseball Cap	400	One size fits all	Black	92	9.00	capb.bmp
+Wool cap	Baseball Cap	401	One size fits all	White	12	10.00	capw.bmp
+Cloth Visor	Visor	500	One size fits all	White	36	7.00	visorw.bmp
+Plastic Visor	Visor	501	One size fits all	Black	28	7.00	visorb.bmp
+Hooded Sweatshirt	Sweatshirt	600	Large	Green	39	24.00	sshirtg.bmp
+Zipped Sweatshirt	Sweatshirt	601	Large	Blue	32	24.00	sshirtb.bmp
+Cotton Shorts	Shorts	700	Medium	Black	80	15.00	shortsb.bmp
+Tank Top	Tee Shirt	300	Small	White	18	9.00	tshirtw.bmp
+V-neck	Tee Shirt	301	Medium	Orange	39	14.00	tshirto.bmp
+Crew Neck	Tee Shirt	302	One size fits all	Black	72	14.00	tshirtb.bmp
+Cotton Cap	Baseball Cap	400	One size fits all	Black	92	9.00	capb.bmp
+Wool cap	Baseball Cap	401	One size fits all	White	12	10.00	capw.bmp
+Cloth Visor	Visor	500	One size fits all	White	36	7.00	visorw.bmp
+Plastic Visor	Visor	501	One size fits all	Black	28	7.00	visorb.bmp
+Hooded Sweatshirt	Sweatshirt	600	Large	Green	39	24.00	sshirtg.bmp
+Zipped Sweatshirt	Sweatshirt	601	Large	Blue	32	24.00	sshirtb.bmp
+Cotton Shorts	Shorts	700	Medium	Black	80	15.00	shortsb.bmp
